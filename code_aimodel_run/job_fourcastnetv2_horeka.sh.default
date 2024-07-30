@@ -1,0 +1,30 @@
+#!/bin/bash
+#SBATCH --partition=gpu_4
+#SBATCH --gres=gpu:1
+#SBATCH --time=15:00
+#SBATCH --mem-per-gpu=32000
+#SBATCH --constraint=LSDF
+#SBATCH --mail-user=jannik.wilhelm@kit.edu
+###SBATCH --output=fcnv2.out
+
+module purge
+source /home/kit/imk-tro/gj5173/anaconda3/etc/profile.d/conda.sh
+conda activate ai-models
+module load devel/cuda/11.7
+
+MYDATE=$1       # YYYYMMDD
+MYTIME=$2       # HHmm
+OUTPATH=$3      # Path for FCNv2 forecast file output
+AIMODELS=$4     # Path to ai-models main directory (including the assets sub-directory)
+OUTFILENAME=$5  # Name of FCNv2 output file (without .nc or .grib suffix)
+ICFILE=$6       # Path to the initial condition file (in workspace)
+MYLOG=$7        # Path to the log file (in workspace)
+MYMEMBER=$8     # Member number (0 = control/deterministic; 1-50 EPS)
+
+cd ${AIMODELS}
+
+echo "Starting FourCastNetv2 on GPU"
+ai-models --file ${ICFILE} --assets ${AIMODELS}/assets/fcnv2/ --date ${MYDATE} --time ${MYTIME} --lead-time 360 --path ${OUTPATH}/${OUTFILENAME}.grib fourcastnetv2-small > ${MYLOG}/fcnv2_m${MYMEMBER}.log 2>&1
+wait
+echo "FourCastNetv2 on GPU finished"
+

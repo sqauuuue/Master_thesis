@@ -1,0 +1,44 @@
+#!/bin/bash
+
+#loop script for loop through dates and members
+
+chmod +x run_fourcastnetv2_uc2_240114.sh.default
+
+MYSTARTDATE=2021-06-25
+MYENDDATE=2021-06-25
+MYMEMBERS=({5..50}) 
+
+
+
+start_timestamp=$(date -d "$MYSTARTDATE" +%s) #convert the date format into Unix format for looping
+echo "Start date in Unix timestamp format: $start_timestamp"
+end_timestamp=$(date -d "$MYENDDATE" +%s)
+echo "End date in Unix timestamp format: $end_timestamp"
+
+mydate_timestamp=$start_timestamp #initialize the current start date
+
+while [ "$mydate_timestamp" -le "$end_timestamp" ]; do
+    MYDATE=$(date -d "@$mydate_timestamp" "+%Y%m%d") # Convert current timestamp back to date
+    echo "Start with the date:${MYDATE} "
+    for MYMEMBER in "${MYMEMBERS[@]}"; do
+	echo "Start with member:${MYMEMBER}"
+        #./run_fourcastnetv2_horeka.sh.default ${MYDATE} 0000 era5 ${MYMEMBER} gauss_0.3
+	nohup ./run_fourcastnetv2_uc2_240114.sh.default ${MYDATE} 0000 era5 ${MYMEMBER} gauss_0.3 >> combined_log_0625_era5_5_50.log 2>&1 &
+	sleep 10
+	check=$(squeue | wc -l)  #to check how many jobs are currently in the queue, not to submit the job when there are jobs more that a certain amount 
+        while [ ${check} -gt 5 ]; do   
+            echo "Too many jobs are queuing or running at the moment. Wait 30 seconds." 
+            sleep 30   
+            check=$(squeue | wc -l) 
+        done
+	echo "Finish with the member:${MYMEMBER}"
+    done
+    
+    mydate_timestamp=$((mydate_timestamp+ 86400))
+
+
+    echo "Finishied last job now move to ${mydate_timestamp}"
+done
+
+
+

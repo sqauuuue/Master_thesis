@@ -1,0 +1,114 @@
+# Set paths to ai-models installation and workspace
+# =================================================
+
+AIMODELS="/home/kit/imk-tro/gj5173/ai-models"     # user-specific
+AIWORKSPACE="/pfs/work7/workspace/scratch/gj5173-ws_ai_models" # user-specific
+
+# =============================================================================
+# Do not change below unless you know what you do!
+
+MYDATE=$1                # YYYYMMDD
+MYTIME=$2                # HHmm
+MYINI=$3                 # era5, ifs
+MYMEMBER=$4              # 0-50; must be 0 for deterministic/control run
+MYPERT=${5:-""}          # ERA5 perturbation scenario
+
+LSDFDATA="/lsdf/kit/imk-tro/projects/MOD/Gruppe_Knippertz/ey9908/tmp_Yangfan/data_ai-models"
+ERA5DATA=${LSDFDATA}"/era5"
+IFSDATA=${LSDFDATA}"/ifs"
+OUTPATH=${AIWORKSPACE}"/"${MYINI}"/"${MYPERT} # will be created, if not existent
+
+# =============================================================================
+# Do not change below unless you know what you do!
+
+OUTFILENAME=fcnv2_fc_${MYINI}_${MYDATE}_${MYTIME}_m${MYMEMBER} # without .grib and .nc suffix
+
+mkdir -p ${OUTPATH}
+mkdir -p ${OUTPATH}/${MYDATE}
+MYIC=${OUTPATH}/${MYDATE}/initial_conditions
+MYFC=${OUTPATH}/${MYDATE}/forecasts
+MYLOG=${OUTPATH}/${MYDATE}/log
+mkdir -p ${MYIC}
+mkdir -p ${MYFC}
+
+CURDIR=${PWD}
+cd ${AIMODELS}
+
+# Data file preprocessing
+# =======================
+echo "Data preprocessing"
+if [[ ${MYINI} == "era5" ]]; then
+  if [[ ${MYMEMBER} == "0" ]]; then
+    INFILE=${ERA5DATA}/era5_2021-JJ.grib
+    ICFILE=${MYIC}/era5_cf_${MYDATE}.grib
+    echo "Control (unperturbed) ERA5 initial conditions for ${MYDATE} selected."
+  else
+    INFILE=${ERA5DATA}/era5_eps_${MYPERT}_2021-JJ_m"${MYMEMBER}".grib
+    ICFILE=${MYIC}/era5_eps_${MYPERT}_${MYDATE}_m"${MYMEMBER}".grib
+    echo "ERA5 EPS initial conditions (member ${MYMEMBER}) for ${MYDATE} with perturbation method ${MYPERT} selected."
+  fi
+elif [[ ${MYINI} == "ifs" ]]; then
+  if [[ ${MYMEMBER} == "0" ]]; then
+    INFILE=${IFSDATA}/ec_det_2021-JJ.grib
+    ICFILE=${MYIC}/ec_det_${MYDATE}.grib
+    echo "Deterministic operational IFS initial conditions for ${MYDATE} selected."
+  else
+    INFILE=${IFSDATA}/ec_eps_2021-JJ_m"${MYMEMBER}".grib
+    ICFILE=${MYIC}/ec_eps_${MYDATE}_m"${MYMEMBER}".grib
+    echo "IFS EPS initial conditions (member ${MYMEMBER}) for ${MYDATE} selected."
+  fi
+else
+  echo "Invalid name of IC chosen (3rd argument was ${MYINI}, but can only be era5 or ifs). Exit."
+  exit
+fi
+wait
+
+# Checks
+# ======
+if [ ! -f ${INFILE} ]; then
+  echo "The input data file ${INFILE} does not exist. Please check your settings. Exit."
+  exit
+fi
+
+check=$(cdo showdate ${INFILE} | grep $(date -d ${MYDATE} +%Y-%m-%d) | wc -l)
+if [[ ${check} == 0 ]]; then
+  echo "The input data file ${INFILE} does not contain the date ${MYDATE}. Exit."
+  exit
+fi
+
+if [[ ${MYMEMBER} -lt 0 || ${MYMEMBER} -gt 50 ]]; then
+  echo "Invalid member number chosen (4rd argument was ${MYMEMBER}, but can only be between 0 and 50). Exit."
+  exit
+fi
+cdo -seldate,${MYDATE} ${INFILE} ${ICFILE}
+
+# Run the job
+# ===========
+FCNOUTFILE=${MYLOG}/fcnv2_m${MYMEMBER}.out
+sbatch --output ${FCNOUTFILE} job_fourcastnetv2_horeka.sh.default ${MYDATE} ${MYTIME} ${MYFC} ${AIMODELS} ${OUTFILENAME} ${ICFILE} ${MYLOG} ${MYMEMBER}
+wait
+
+wt=0
+while [ ! -f ${FCNOUTFILE} ]; do
+  echo "SLURM job still queueing (${wt} s)..."
+  sleep 10
+  ((wt=wt+10))
+done
+
+check=$(cat ${FCNOUTFILE} | grep 'FourCastNetv2 on GPU finished' | wc -l)
+wt=0
+while [[ ${check} == 0 ]]; do
+  echo "Waiting for FCNv2 to finish (${wt} s)..."
+  sleep 10
+  ((wt=wt+10))
+  check=$(cat ${FCNOUTFILE} | grep 'FourCastNetv2 on GPU finished' | wc -l)
+done
+
+# Data postprocessing
+# ===================
+echo "Data postprocessing"
+cdo -f nc copy ${MYFC}/${OUTFILENAME}.grib ${MYFC}/${OUTFILENAME}.nc
+#wait
+#rm -f ${OUTPATH}/${OUTFILENAME}.grib
+
+cd ${CURDIR}
