@@ -4,3 +4,8 @@ This repository provides code for my master thesis, which includes code for simu
 
 ## The code and description in each folder are as follows:
 
+| Folder | Description |
+|----------|----------|
+| Row 1, Col 1 | Row 1, Col 2 | 
+| Row 2, Col 1 | Row 2, Col 2 |
+| Row 3, Col 1 | Row 3, Col 2 |
