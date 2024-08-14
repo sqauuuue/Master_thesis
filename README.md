@@ -6,6 +6,6 @@ This repository provides code for my master thesis, which includes code for simu
 
 | Folder | Description |
 |----------|----------|
-| Row 1, Col 1 | Row 1, Col 2 | 
+|<span style="background-color: lightgray; padding: 2px;">code_aimodel_run| Row 1, Col 2 | 
 | Row 2, Col 1 | Row 2, Col 2 |
 | Row 3, Col 1 | Row 3, Col 2 |
